@@ -1,6 +1,7 @@
 package exporter
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,6 +15,7 @@ var (
 	callsLimitDesc           = prometheus.NewDesc(prefix+"calls_limit", "Maximum number of supported simultaneous calls", nil, nil)
 	extensionsTotalDesc      = prometheus.NewDesc(prefix+"extensions_total", "Number of total extensions", nil, nil)
 	extensionsRegisteredDesc = prometheus.NewDesc(prefix+"extensions_registered", "Number of registered extensions", nil, nil)
+	extensionsDetailDesc     = prometheus.NewDesc(prefix+"extension_detail", "extension details", []string{"id", "name"}, nil)
 	lastBackupDesc           = prometheus.NewDesc(prefix+"last_backup", "Timestamp of last backup", nil, nil)
 	maintenanceUntilDesc     = prometheus.NewDesc(prefix+"maintenance_until", "Expiration timestamp of the maintenance", nil, nil)
 
@@ -36,6 +38,7 @@ func (ex *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- callsLimitDesc
 	ch <- extensionsTotalDesc
 	ch <- extensionsRegisteredDesc
+	ch <- extensionsDetailDesc
 	ch <- lastBackupDesc
 	ch <- maintenanceUntilDesc
 
@@ -105,5 +108,20 @@ func (ex *Exporter) Collect(ch chan<- prometheus.Metric) {
 		}
 	} else {
 		log.Println("failed to fetch TrunkList:", err)
+	}
+
+	extensions, err := ex.API.ExtensionList()
+	if err == nil {
+		for _, extension := range extensions {
+			status := 0
+			name := extension.FirstName
+			id := extension.Id
+			if extension.IsRegistered {
+				status = 1
+			}
+			ch <- prometheus.MustNewConstMetric(extensionsDetailDesc, prometheus.GaugeValue, float64(status), []string{fmt.Sprintf("%d", id), name}...)
+		}
+	} else {
+		log.Println("failed to fetch ServiceList:", err)
 	}
 }
